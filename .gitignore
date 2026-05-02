@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Editors
+*.swp
+*.swo
+*~
+
+# OS/IDE
+.DS_Store
+.vscode/
+.idea/
