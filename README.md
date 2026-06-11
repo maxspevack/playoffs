@@ -106,6 +106,7 @@ Total runtime: ~500ms.
 - **Range queries instead of caching.** Two range queries replace single-day fetching. Disk caching was prototyped and removed once the underlying volume dropped 24x; the access pattern itself was the optimization.
 - **Score-gap sort in LIVE NOW.** `abs(home_score - away_score)` is a direct proxy for "should I tune in?" – a 1-point game with 4 minutes left ranks above a 20-point blowout, regardless of game number or start time.
 - **Boundary validation.** `_is_valid` runs twice in `gather()` – once before normalize (drops `TBD vs TBD` placeholders) and once after (defends against any same-team edge case introduced by placeholder resolution). Validate at the seam, trust the room.
+- **Drops have a witness.** Unclassifiable games are dropped by design (play-in games and regular-season leakage carry no usable headline) – but a *non-empty* headline that fails to classify warns on stderr first, deduped per series stage. A classifier gap once erased the entire conference-finals round from both leagues with no visible symptom; the warning makes the next ESPN vocabulary drift announce itself.
 
 ## Development
 
@@ -118,6 +119,8 @@ python3 -m pytest tests/
 Tests cover the logic helpers (`_safe_int`, `count_wins`, `is_series_done`, `round_num`, `fmt_state`, `elim_status_live`, `normalize_placeholders`, `find_recent_games`, `contingent_tag`, `parse`, `fmt_when`). No network access; all tests use synthetic game dicts.
 
 The suite has caught one real bug that production data was masking: `round_num` returning 3 for "Conference Semifinals" because "semifinals" contains "final". ESPN happens to use "1st Round" / "2nd Round" naming so the bug was dormant; the test forced the issue.
+
+The failure also flows the other way: the round tests originally asserted invented labels like "Eastern Conference Finals" – which ESPN never sends – so the suite stayed green while every real conference-finals game ("East Final", "West Finals") fell through the classifier and silently vanished from the bracket. The `round_num` tests now assert the verbatim headline vocabulary captured from the 2024–2026 seasons, and `gather()` warns on stderr when a non-empty headline fails to classify. Fixtures mirror the wire; drops have a witness.
 
 ## Files
 
@@ -150,6 +153,17 @@ https://site.api.espn.com/apis/site/v2/sports/{sport}/{league}/scoreboard?dates=
 - `seasontype=3`: post-season (excludes regular season and exhibitions)
 
 Per-event round and game number live at `competitions[0].notes[0].headline` (e.g., `"East 1st Round - Game 6"`). Series state lives at `competitions[0].series.summary` but the score-derived computation is more reliable.
+
+Observed headline vocabulary (verbatim, stable across the 2024–2026 seasons):
+
+| Round | NHL | NBA |
+|---|---|---|
+| 1 | `East/West 1st Round - Game N` | `East/West 1st Round - Game N` |
+| 2 | `East/West 2nd Round - Game N` | `East/West Semifinals - Game N` |
+| 3 | `East/West Final - Game N` | `East/West Finals - Game N` |
+| 4 | `Stanley Cup Final - Game N` | `NBA Finals - Game N` |
+
+Note that "Conference" never appears. Unplayed deciding games carry an ` If Necessary` suffix. Known drops (classified to round 0, no warning): `NBA Play-In - ...` labels, and the empty headlines on regular-season games that leak into the date window.
 
 ## License
 

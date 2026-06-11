@@ -18,7 +18,14 @@ RECENT_GAP_HOURS = 6
 DIM_AGE_HOURS = 8
 HTTP_TIMEOUT = 10
 UA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
-ROUND_LABEL = {1: "Round 1", 2: "Round 2", 3: "Conference Finals", 4: "Finals"}
+# Full header strings, keyed (league, round) — composing f"{league} {label}" produced "NHL Finals",
+# which is not a thing. Each league's proper nouns differ ("Stanley Cup Final" vs "NBA Finals").
+ROUND_LABEL = {
+    ("NHL", 1): "NHL Round 1", ("NHL", 2): "NHL Round 2",
+    ("NHL", 3): "NHL Conference Finals", ("NHL", 4): "Stanley Cup Final",
+    ("NBA", 1): "NBA Round 1", ("NBA", 2): "NBA Conference Semifinals",
+    ("NBA", 3): "NBA Conference Finals", ("NBA", 4): "NBA Finals",
+}
 LEAGUE_ORDER = {"NHL": 0, "NBA": 1}
 
 # Visible-cell column widths for terminal layout. ANSI codes excluded.
@@ -61,9 +68,9 @@ def fetch(url):
 
 def round_num(headline):
     h = headline.lower()
-    if "stanley cup" in h or "nba finals" in h: return 4
-    if "2nd" in h or "semi" in h: return 2  # check before "conf+final" since "semifinals" contains "final"
-    if "conf" in h and "final" in h: return 3
+    if "stanley cup final" in h or "nba finals" in h: return 4
+    if "2nd" in h or "semi" in h: return 2  # check before "final" since "semifinals" contains "final"
+    if "final" in h: return 3  # ESPN: "East Final" (NHL) / "West Finals" (NBA); league finals matched above
     if "1st" in h or "first" in h: return 1
     return 0
 
@@ -93,6 +100,7 @@ def parse(event, league):
         "final": state == "post",
         "in_progress": state == "in",
         "status_detail": c.get("status", {}).get("type", {}).get("shortDetail", ""),
+        "headline": headline,
         "round": round_num(headline),
         "game_num": int(m.group(1)) if m else None,
         "series_done": (c.get("series") or {}).get("completed", False),
@@ -135,6 +143,19 @@ def _is_valid(g):
     return g["round"] > 0 and g["home"] and g["away"] and g["home"] != g["away"]
 
 
+def warn_unclassified(games):
+    """Stderr witness for non-empty headlines round_num() couldn't classify.
+
+    Empty headlines (regular-season leakage) and play-in games are known, silent drops.
+    Anything else dropping silently is how the conference finals vanished for weeks.
+    Deduped per series stage (game-number suffix stripped), not per game.
+    """
+    unknown = {re.sub(r" - Game \d+.*", "", g["headline"]) for g in games
+               if g["round"] == 0 and g["headline"] and "play-in" not in g["headline"].lower()}
+    for h in sorted(unknown):
+        print(f"warn: unclassified headline dropped: {h!r}", file=sys.stderr)
+
+
 def gather(today):
     """Fetch one date-range request per league in parallel, parse, filter, normalize.
 
@@ -158,6 +179,7 @@ def gather(today):
                 p = parse(ev, label)
                 if p is not None:
                     games.append(p)
+    warn_unclassified(games)
     games = [g for g in games if _is_valid(g)]
     games = normalize_placeholders(games)
     return [g for g in games if _is_valid(g)], network_ok
@@ -402,7 +424,7 @@ def main():
         if done: parts.append(f"{len(done)} done")
         suffix = f" ({' · '.join(parts)})" if parts else ""
         print()
-        print(st(f"{league} {ROUND_LABEL.get(rnd, 'Playoffs')}", "bold", "cyan") + suffix)
+        print(st(ROUND_LABEL.get((league, rnd), f"{league} Playoffs"), "bold", "cyan") + suffix)
         for s in active:
             print(render_active_card(s, today))
         if done:

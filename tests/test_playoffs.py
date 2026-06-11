@@ -23,6 +23,7 @@ def make_game(home="A", away="B", home_score=0, away_score=0, winner=None,
         "final": final,
         "in_progress": in_progress,
         "status_detail": "",
+        "headline": "",
         "round": round_n,
         "game_num": game_num,
         "series_done": False,
@@ -111,30 +112,73 @@ def test_is_series_done_4_3():
 
 # ---------- round_num ----------
 
-def test_round_num_first():
-    assert playoffs.round_num("East 1st Round - Game 1") == 1
+# Verbatim ESPN headline vocabulary, captured from the live scoreboard API for the
+# 2024, 2025, and 2026 playoffs (game numbers normalized to N). This is ground truth:
+# the original round-3 bug shipped green because the old tests asserted invented
+# labels ("Eastern Conference Finals") that ESPN never sends.
+ESPN_HEADLINE_ROUNDS = {
+    # NHL
+    "East 1st Round - Game N": 1,
+    "West 1st Round - Game N": 1,
+    "East 2nd Round - Game N": 2,
+    "West 2nd Round - Game N": 2,
+    "East Final - Game N": 3,
+    "West Final - Game N": 3,
+    "Stanley Cup Final - Game N": 4,
+    "Stanley Cup Final - Game N If Necessary": 4,
+    # NBA (1st Round labels shared with NHL above)
+    "East Semifinals - Game N": 2,
+    "West Semifinals - Game N": 2,
+    "East Finals - Game N": 3,
+    "West Finals - Game N": 3,
+    "NBA Finals - Game N": 4,
+    "NBA Finals - Game N If Necessary": 4,
+    # Expected silent drops: regular-season leakage and play-in
+    "": 0,
+    "ESPN+ Hockey Night": 0,
+    "NBA Play-In - East - 7th Place vs 8th Place": 0,
+    "NBA Play-In - East - 8th Seed Game": 0,
+    "NBA Play-In - West - 9th Place vs 10th Place": 0,
+}
+
+
+def test_round_num_real_espn_vocabulary():
+    for headline, expected in ESPN_HEADLINE_ROUNDS.items():
+        got = playoffs.round_num(headline.replace("Game N", "Game 5"))
+        assert got == expected, f"{headline!r}: expected round {expected}, got {got}"
+
+
+def test_round_num_defensive_variants():
+    """Labels ESPN does NOT currently send — drift robustness, not ground truth."""
     assert playoffs.round_num("Western First Round - Game 3") == 1
-
-
-def test_round_num_second():
-    assert playoffs.round_num("East 2nd Round - Game 1") == 2
     assert playoffs.round_num("Conference Semifinals - Game 3") == 2
-
-
-def test_round_num_conf_finals():
     assert playoffs.round_num("Eastern Conference Finals - Game 1") == 3
     assert playoffs.round_num("West Conf Finals - Game 4") == 3
-
-
-def test_round_num_finals():
-    assert playoffs.round_num("Stanley Cup Final - Game 1") == 4
-    assert playoffs.round_num("NBA Finals - Game 1") == 4
-
-
-def test_round_num_unknown():
-    assert playoffs.round_num("") == 0
+    assert playoffs.round_num("Stanley Cup Finals - Game 1") == 4
     assert playoffs.round_num("Regular Season Game") == 0
     assert playoffs.round_num("Play-In Tournament") == 0
+
+
+# ---------- warn_unclassified ----------
+
+def test_warn_unclassified_flags_unknown_headline(capsys):
+    games = [
+        {**make_game(round_n=0), "headline": "Mystery Sponsored Round - Game 1"},
+        {**make_game(round_n=0), "headline": "Mystery Sponsored Round - Game 2"},
+    ]
+    playoffs.warn_unclassified(games)
+    err = capsys.readouterr().err
+    assert err.count("Mystery Sponsored Round") == 1  # deduped per headline
+
+
+def test_warn_unclassified_silent_on_known_drops(capsys):
+    games = [
+        {**make_game(round_n=0), "headline": ""},  # regular-season leakage
+        {**make_game(round_n=0), "headline": "NBA Play-In - East - 8th Seed Game"},
+        {**make_game(round_n=1), "headline": "East 1st Round - Game 1"},  # classified fine
+    ]
+    playoffs.warn_unclassified(games)
+    assert capsys.readouterr().err == ""
 
 
 # ---------- fmt_state ----------
@@ -379,7 +423,7 @@ def test_parse_handles_non_numeric_score():
                 {"homeAway": "home", "team": {"abbreviation": "TBD", "name": "TBD"}, "score": "TBD"},
                 {"homeAway": "away", "team": {"abbreviation": "TBD", "name": "TBD"}, "score": ""},
             ],
-            "notes": [{"headline": "First Round - Game 1"}],
+            "notes": [{"headline": "East 1st Round - Game 1"}],
             "status": {"type": {"state": "pre"}},
         }]
     }
@@ -414,7 +458,7 @@ def test_parse_missing_winner_field():
                 {"homeAway": "home", "team": {"abbreviation": "A", "name": "A"}, "score": "1"},
                 {"homeAway": "away", "team": {"abbreviation": "B", "name": "B"}, "score": "0"},
             ],
-            "notes": [{"headline": "First Round - Game 1"}],
+            "notes": [{"headline": "East 1st Round - Game 1"}],
             "status": {"type": {"state": "in"}},
         }]
     }
