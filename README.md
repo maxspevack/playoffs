@@ -5,38 +5,40 @@ One-screen terminal dashboard for the NHL and NBA playoffs. Stdlib only, single 
 ## Sample output
 
 ```
-PLAYOFFS  Fri May 1 2026   updated 10:52 PM PDT
+PLAYOFFS  Thu Jun 11 2026   updated 11:38 AM PDT
 
 RECENT
-  3h ago     NHL  R1 G6   VGK 5 @ UTA 1       VGK advances 4-2
-  4h ago     NBA  R1 G6   LAL 98 @ HOU 78     LAL advances 4-2
-  6h ago     NHL  R1 G6   BUF 4 @ BOS 1       BUF advances 4-2
-  6h ago     NBA  R1 G6   CLE 110 @ TOR 112   tied 3-3
-  6h ago     NHL  R1 G6   TB 1 @ MTL 0        tied 3-3
-  6h ago     NBA  R1 G6   DET 93 @ ORL 79     tied 3-3
+  18h ago    NBA  R4 G4   SA 106 @ NY 107     NY 3-1
 
-TOMORROW
-  4:30 PM   NBA  R1 G7 ★   PHI @ BOS
-  5:00 PM   NHL  R2 G1     PHI @ CAR
+LATER TODAY
+  5:00 PM   NHL  R4 G5     VGK @ CAR
 
-NHL Round 2 (2 active)
-  CAR vs PHI                 G1 tomorrow
-  COL vs MIN                 G1 May 3
 
-NHL Round 1 (1 active · 7 done)
-  MTL vs TB       tied 3-3   G7 May 3 ★     MTL·TB·MTL·TB·MTL·TB
+Stanley Cup Final (1 active)
+  CAR vs VGK      tied 2-2   G5 5:00 PM     VGK·CAR·VGK·CAR
+
+NHL Conference Finals (2 done)
+  done: CAR-MTL 4-1 · VGK-COL 4-0
+
+NHL Round 2 (4 done)
+  done: CAR-PHI 4-0 · COL-MIN 4-1 · MTL-BUF 4-3 · VGK-ANA 4-2
+
+NHL Round 1 (8 done)
   done: ANA-EDM 4-2 · BUF-BOS 4-2 · CAR-OTT 4-0 · COL-LA 4-0 · MIN-DAL 4-2
-        PHI-PIT 4-2 · VGK-UTA 4-2
+        MTL-TB 4-3 · PHI-PIT 4-2 · VGK-UTA 4-2
 
-NBA Round 2 (2 active)
-  MIN vs SA                  G1 May 3
-  LAL vs OKC                 G1 May 4
+NBA Finals (1 active)
+  NY vs SA        NY 3-1     G5 Jun 13 ★    NY·NY·SA·NY
 
-NBA Round 1 (3 active · 5 done)
-  CLE vs TOR      tied 3-3   G7 May 3 ★     CLE·CLE·TOR·TOR·CLE·TOR
-  BOS vs PHI      tied 3-3   G7 tomorrow ★  BOS·PHI·BOS·BOS·PHI·PHI
-  DET vs ORL      tied 3-3   G7 May 3 ★     ORL·DET·ORL·ORL·DET·DET
-  done: LAL-HOU 4-2 · MIN-DEN 4-2 · NY-ATL 4-2 · OKC-PHX 4-0 · SA-POR 4-1
+NBA Conference Finals (2 done)
+  done: NY-CLE 4-0 · SA-OKC 4-3
+
+NBA Conference Semifinals (4 done)
+  done: CLE-DET 4-3 · NY-PHI 4-0 · OKC-LAL 4-0 · SA-MIN 4-2
+
+NBA Round 1 (8 done)
+  done: CLE-TOR 4-3 · DET-ORL 4-3 · LAL-HOU 4-2 · MIN-DEN 4-2 · NY-ATL 4-2
+        OKC-PHX 4-0 · PHI-BOS 4-3 · SA-POR 4-1
 ```
 
 When live games are happening, a `LIVE NOW` section appears at the top instead of `RECENT`, sorted by score gap (closest first) with closeout/stay-alive markers:
@@ -139,7 +141,7 @@ playoffs/
 
 - `PLAYOFF_START = date(2026, 4, 15)` is hardcoded. Update for future seasons or compute from the calendar.
 - Times use the system's local timezone via `datetime.astimezone()` and `%Z` strftime. If your terminal lies about its locale, times will too.
-- No offline mode – an ESPN outage produces "No playoff games found."
+- No offline mode – a full ESPN outage produces "ESPN unreachable"; a single-league failure still renders the surviving league, under a red "partial view" warning on stdout.
 - WNBA / college basketball / NFL playoffs not supported. Adding them is one entry in the `LEAGUES` constant plus verification that ESPN uses the same JSON shape.
 
 ## ESPN endpoint reference
