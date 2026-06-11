@@ -108,34 +108,38 @@ def parse(event, league):
 
 
 def normalize_placeholders(games):
-    """Translate 'Lakers/Rockets' to 'LAL/HOU', then resolve to actual winner once that R1 series is decided."""
+    """Translate 'Lakers/Rockets' to 'LAL/HOU', then resolve to actual winner once that R1 series is decided.
+
+    All lookups are league-keyed: the list holds both leagues at once, and NHL/NBA
+    share abbreviations (DAL, MIN, BOS, ...) and nicknames ("Kings").
+    """
     name_map = {}
     for g in games:
         if "/" not in g["home"] and g["home_name"]:
-            name_map[g["home_name"]] = g["home"]
+            name_map[(g["league"], g["home_name"])] = g["home"]
         if "/" not in g["away"] and g["away_name"]:
-            name_map[g["away_name"]] = g["away"]
+            name_map[(g["league"], g["away_name"])] = g["away"]
 
-    def fix(abbrev):
+    def fix(league, abbrev):
         if "/" not in abbrev: return abbrev
-        return "/".join(name_map.get(p, p) for p in abbrev.split("/"))
+        return "/".join(name_map.get((league, p), p) for p in abbrev.split("/"))
 
     for g in games:
-        g["home"] = fix(g["home"])
-        g["away"] = fix(g["away"])
+        g["home"] = fix(g["league"], g["home"])
+        g["away"] = fix(g["league"], g["away"])
 
     wins_by_pair = defaultdict(lambda: defaultdict(int))
     for g in games:
         if "/" not in g["home"] and "/" not in g["away"] and g["final"] and g["winner"]:
-            wins_by_pair[frozenset({g["home"], g["away"]})][g["winner"]] += 1
+            wins_by_pair[(g["league"], frozenset({g["home"], g["away"]}))][g["winner"]] += 1
     winners = {key: team for key, wins in wins_by_pair.items()
                for team, count in wins.items() if count >= 4}
     for g in games:
         for slot in ("home", "away"):
             if "/" in g[slot]:
-                parts = frozenset(g[slot].split("/"))
-                if parts in winners:
-                    g[slot] = winners[parts]
+                key = (g["league"], frozenset(g[slot].split("/")))
+                if key in winners:
+                    g[slot] = winners[key]
     return games
 
 

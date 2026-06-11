@@ -94,7 +94,7 @@ watch -n 60 playoffs
 Pipeline: `gather → normalize → group → render`.
 
 1. **gather**: Two parallel HTTPS requests to ESPN's public scoreboard endpoint, one per league, each using a date-range query covering the entire playoff window. Replaces what would otherwise be ~50 single-day requests.
-2. **normalize**: Translate ESPN's `"Lakers/Rockets"` placeholder strings (used for unresolved Round 2+ slots) to `"LAL/HOU"` style. Once a Round 1 series is decided, resolve the placeholder to the actual winner so duplicate Round 2 entries collapse into one series.
+2. **normalize**: Translate ESPN's `"Lakers/Rockets"` placeholder strings (used for unresolved Round 2+ slots) to `"LAL/HOU"` style. Once a Round 1 series is decided, resolve the placeholder to the actual winner so duplicate Round 2 entries collapse into one series. All lookups are league-keyed – NHL and NBA share team abbreviations (DAL, MIN, BOS) and nicknames (both leagues have a Kings).
 3. **group**: Bucket games by `(league, frozenset({home, away}))` to recover series. Sort each series by date.
 4. **render**: Print sections with column-aligned formatting. Auto-hide rules (LIVE NOW takes priority over RECENT) make the dashboard adaptive without per-section configuration.
 

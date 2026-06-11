@@ -292,6 +292,30 @@ def test_normalize_placeholders_no_change_when_no_placeholders():
     assert result[0]["away"] == "B"
 
 
+def test_normalize_placeholders_wins_keyed_by_league():
+    """NHL and NBA share abbreviations: NHL DAL-MIN wins must not merge with NBA
+    DAL-MIN wins to fake a 4-win series resolution (2+2 across leagues != clinched)."""
+    games = [make_game(home="DAL", away="MIN", final=True, winner="DAL",
+                       league="NHL", game_num=i + 1) for i in range(2)]
+    games += [make_game(home="DAL", away="MIN", final=True, winner="DAL",
+                        league="NBA", game_num=i + 1) for i in range(2)]
+    games.append(make_game(home="DAL/MIN", away="COL", round_n=2, league="NHL"))
+    result = playoffs.normalize_placeholders(games)
+    assert result[-1]["home"] == "DAL/MIN"
+
+
+def test_normalize_placeholders_names_keyed_by_league():
+    """'Kings' exists in both leagues (NHL LA, NBA SAC); nickname lookup must stay in-league."""
+    games = [
+        make_game(home="LA", away="EDM", home_name="Kings", away_name="Oilers", league="NHL"),
+        make_game(home="SAC", away="GS", home_name="Kings", away_name="Warriors", league="NBA"),
+        make_game(home="Kings/Oilers", away="VGK", home_name="Kings/Oilers",
+                  round_n=2, league="NHL"),
+    ]
+    result = playoffs.normalize_placeholders(games)
+    assert result[-1]["home"] == "LA/EDM"
+
+
 # ---------- find_recent_games ----------
 
 def _now():
