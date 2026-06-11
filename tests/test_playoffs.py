@@ -26,7 +26,6 @@ def make_game(home="A", away="B", home_score=0, away_score=0, winner=None,
         "headline": "",
         "round": round_n,
         "game_num": game_num,
-        "series_done": False,
     }
 
 
@@ -488,6 +487,28 @@ def test_parse_missing_winner_field():
     }
     parsed = playoffs.parse(event, "NHL")
     assert parsed["winner"] is None
+
+
+def _minimal_competition():
+    return {
+        "competitors": [
+            {"homeAway": "home", "team": {"abbreviation": "A", "name": "A"}, "score": "0"},
+            {"homeAway": "away", "team": {"abbreviation": "B", "name": "B"}, "score": "0"},
+        ],
+        "notes": [{"headline": "East 1st Round - Game 1"}],
+        "status": {"type": {"state": "pre"}},
+    }
+
+
+def test_parse_missing_date():
+    """One malformed event must not take down the whole run."""
+    event = {"competitions": [_minimal_competition()]}
+    assert playoffs.parse(event, "NHL") is None
+
+
+def test_parse_malformed_date():
+    assert playoffs.parse({"date": "not-a-date", "competitions": [_minimal_competition()]}, "NHL") is None
+    assert playoffs.parse({"date": None, "competitions": [_minimal_competition()]}, "NHL") is None
 
 
 # ---------- fmt_when ----------

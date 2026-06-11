@@ -76,9 +76,13 @@ def round_num(headline):
 
 
 def parse(event, league):
-    """Returns a normalized game dict, or None if the event lacks home+away."""
+    """Returns a normalized game dict, or None on a malformed event (missing date or home+away)."""
     c = (event.get("competitions") or [None])[0]
     if not c:
+        return None
+    try:
+        when = datetime.fromisoformat(str(event["date"]).replace("Z", "+00:00")).astimezone()
+    except (KeyError, ValueError):
         return None
     home = next((x for x in c.get("competitors", []) if x.get("homeAway") == "home"), None)
     away = next((x for x in c.get("competitors", []) if x.get("homeAway") == "away"), None)
@@ -89,7 +93,7 @@ def parse(event, league):
     m = re.search(r"Game (\d+)", headline)
     return {
         "league": league,
-        "date": datetime.fromisoformat(event["date"].replace("Z", "+00:00")).astimezone(),
+        "date": when,
         "home": home["team"]["abbreviation"],
         "home_name": home["team"].get("name", ""),
         "away": away["team"]["abbreviation"],
@@ -103,7 +107,6 @@ def parse(event, league):
         "headline": headline,
         "round": round_num(headline),
         "game_num": int(m.group(1)) if m else None,
-        "series_done": (c.get("series") or {}).get("completed", False),
     }
 
 
@@ -163,12 +166,12 @@ def warn_unclassified(games):
 def gather(today):
     """Fetch one date-range request per league in parallel, parse, filter, normalize.
 
-    Returns (games, network_ok). network_ok is False if any league fetch failed.
+    Returns (games, failed) where failed lists the leagues whose fetch errored.
     """
     last = today + timedelta(days=LOOKAHEAD_DAYS)
     range_str = f"{PLAYOFF_START:%Y%m%d}-{last:%Y%m%d}"
     games = []
-    network_ok = True
+    failed = []
     with ThreadPoolExecutor(max_workers=len(LEAGUES)) as ex:
         futures = []
         for label, sport, lg in LEAGUES:
@@ -177,7 +180,7 @@ def gather(today):
         for label, future in futures:
             events = future.result()
             if events is None:
-                network_ok = False
+                failed.append(label)
                 continue
             for ev in events:
                 p = parse(ev, label)
@@ -186,7 +189,7 @@ def gather(today):
     warn_unclassified(games)
     games = [g for g in games if _is_valid(g)]
     games = normalize_placeholders(games)
-    return [g for g in games if _is_valid(g)], network_ok
+    return [g for g in games if _is_valid(g)], failed
 
 
 def fmt_clock(dt):
@@ -222,7 +225,7 @@ def count_wins(series_games):
 
 
 def is_series_done(series_games):
-    """Series is done when one team has 4 wins, regardless of ESPN's series_done flag."""
+    """Series is done when one team has 4 wins; ESPN's series.completed flag lags and is not consulted."""
     _, _, aw, bw = count_wins(series_games)
     return max(aw, bw) >= 4
 
@@ -381,13 +384,16 @@ def main():
     print(st(f"PLAYOFFS  {today:%a %b} {today.day} {today.year}", "bold")
           + st(f"   updated {fmt_clock(now)} {now:%Z}", "dim") + "\n")
 
-    games, network_ok = gather(today)
+    games, failed = gather(today)
     if not games:
-        if not network_ok:
+        if failed:
             print("ESPN unreachable. Check the warnings above.")
         else:
             print("No playoff games in the configured window. Off-season, or PLAYOFF_START needs a bump.")
         return
+    if failed:
+        # A complete-looking single-league board is this tool's known failure shape — say so on stdout.
+        print(st(f"{' and '.join(failed)} fetch failed — partial view", "red") + "\n")
 
     series = defaultdict(list)
     for g in games:
